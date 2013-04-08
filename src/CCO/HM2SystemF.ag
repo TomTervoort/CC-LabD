@@ -1,0 +1,68 @@
+-- include "CCO/HM/AG/Base.ag"
+include "CCO/SystemF/AG/Base.ag"
+
+imports
+{
+
+import Data.Set (Set)
+import qualified Data.Set as S
+import Control.Arrow
+
+}
+
+data TyEnv
+ | EmptyTyEnv
+ | ConsTyEnv  var :: {Var}  binding :: Ty  envTail :: TyEnv
+
+attr Ty TyEnv
+    syn ftv :: (Set TyVar)
+
+sem Ty
+ | TyVar  lhs.ftv = S.singleton @a
+ | Arr    lhs.ftv = @ty1.ftv `S.union` @ty2.ftv
+ | Forall lhs.ftv = S.delete @a @ty1.ftv
+
+sem TyEnv
+ | EmptyTyEnv lhs.ftv = S.empty
+ | ConsTyEnv  lhs.ftv = @binding.ftv `S.union` @envTail.ftv
+
+{
+
+-- | Represents types that only have existential quantification at the top-level.
+type TyScheme = Ty
+
+-- | Generator of fresh (type) variables.
+newtype VarFactory = VarFactory Int
+
+-- | Initialise a new fresh variable factory.
+initVarFactory :: VarFactory
+initVarFactory = VarFactory 0
+
+-- | Generate a fresh variable.
+freshVar :: VarFactory -> (Var, VarFactory)
+freshVar (VarFactory n) = ("_" ++ show n, VarFactory $ n + 1)
+
+-- | Generate a fresh type variable.
+freshTyVar :: VarFactory -> (TyVar, VarFactory)
+freshTyVar (VarFactory n) = ("__" ++ show n, VarFactory $ n + 1)
+
+gen :: TyEnv -> Ty -> TyScheme
+gen env ty = S.foldr Forall ty $ ftvTy `S.difference` ftvEnv
+ where ftvTy = ftv_Syn_Ty $ wrap_Ty (sem_Ty ty) Inh_Ty
+       ftvEnv = ftv_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
+
+inst :: VarFactory -> TyScheme -> (Ty, VarFactory)
+inst gen (Forall a t) = let (fresh, gen') = freshTyVar gen
+                         in first (subTyVar a fresh) $ inst gen' t
+inst gen ty = (ty, gen)
+
+-- | Substitute one type variable with another inside a type.
+subTyVar :: TyVar -> TyVar -> Ty -> Ty
+subTyVar from to = sub
+ where sub ty = case ty of
+                 TyVar v    | v == from -> TyVar to
+                            | otherwise -> TyVar v
+                 Arr t1 t2  -> Arr (sub t1) (sub t2)
+                 Forall a t -> Forall a $ sub t
+
+}
