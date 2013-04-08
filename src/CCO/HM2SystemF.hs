@@ -5,18 +5,22 @@ module CCO.HM2SystemF where
 {-# LINE 5 "CCO/HM2SystemF.ag" #-}
 
 
+import qualified CCO.HM as HM
+
 import Data.Set (Set)
 import qualified Data.Set as S
+import Data.Map (Map)
+import qualified Data.Map as M
 import Control.Arrow
 import Control.Monad
 
-{-# LINE 14 "CCO/HM2SystemF.hs" #-}
+{-# LINE 18 "CCO/HM2SystemF.hs" #-}
 
 {-# LINE 2 "./CCO/SystemF/AG/Base.ag" #-}
 
 import CCO.SourcePos
-{-# LINE 19 "CCO/HM2SystemF.hs" #-}
-{-# LINE 37 "CCO/HM2SystemF.ag" #-}
+{-# LINE 23 "CCO/HM2SystemF.hs" #-}
+{-# LINE 41 "CCO/HM2SystemF.ag" #-}
 
 
 instance Show Ty where
@@ -25,8 +29,16 @@ instance Show Ty where
 instance Show TyEnv where
  show env = stringRep_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
 
--- | Represents types that only have existential quantification at the top-level.
-type TyScheme = Ty
+
+-- | Look up a variable in an environment.
+lookupEnv :: Var -> TyEnv -> Maybe Ty
+lookupEnv _ EmptyTyEnv = Nothing
+lookupEnv x (ConsTyEnv y t rest) | x == y    = Just t
+                                 | otherwise = lookupEnv x rest
+
+-- | Insert a binding into an environment.
+insertEnv :: Var -> Ty -> TyEnv -> TyEnv
+insertEnv = ConsTyEnv
 
 -- | Generator of fresh (type) variables.
 newtype VarFactory = VarFactory Int
@@ -43,7 +55,7 @@ freshVar (VarFactory n) = ("_" ++ show n, VarFactory $ n + 1)
 freshTyVar :: VarFactory -> (TyVar, VarFactory)
 freshTyVar (VarFactory n) = ("__" ++ show n, VarFactory $ n + 1)
 
-gen :: TyEnv -> Ty -> TyScheme
+gen :: TyEnv -> Ty -> Ty
 gen env ty = S.foldr Forall ty $ freeVars ty `S.difference` freeEnvVars env
 
 freeVars :: Ty -> Set TyVar
@@ -52,13 +64,18 @@ freeVars ty = ftv_Syn_Ty $ wrap_Ty (sem_Ty ty) Inh_Ty
 freeEnvVars :: TyEnv -> Set TyVar
 freeEnvVars env = ftv_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
 
-inst :: VarFactory -> TyScheme -> (Ty, VarFactory)
-inst gen (Forall a t) = let (fresh, gen') = freshTyVar gen
-                         in first (subTyVar a $ TyVar fresh) $ inst gen' t
-inst gen ty = (ty, gen)
+inst :: VarFactory -> Ty -> (Ty, VarFactory)
+inst fac (Forall a t) = let (fresh, fac') = freshTyVar fac
+                         in first (subTyVar a $ TyVar fresh) $ inst fac' t
+inst fac ty = (ty, fac)
 
 -- | A type substitution.
 type TySubst = Ty -> Ty
+
+-- | Map a substitution over all the types within an environment.
+mapEnv :: TySubst -> TyEnv -> TyEnv
+mapEnv _ EmptyTyEnv = EmptyTyEnv
+mapEnv f (ConsTyEnv x t rest) = ConsTyEnv x (f t) $ mapEnv f rest
 
 -- | Substitute one type variable with a type.
 subTyVar :: TyVar -> Ty -> TySubst
@@ -77,18 +94,40 @@ unify a b =
   (TyVar a, TyVar b) | a == b -> return id
   (TyVar a1, t2)     | not $ a1 `S.member` freeVars t2 -> return $ subTyVar a1 t2
   (t1, TyVar a2)     | not $ a2 `S.member` freeVars t1 -> return $ subTyVar a2 t1
-  (Arr t11 t12, Arr t21 t22) -> do u1 <- unify t11 t21
-                                   u2 <- unify (u1 t12) (u1 t22)
-                                   return $ u2 . u1
+  (Arr t11 t12, Arr t21 t22) -> do s1 <- unify t11 t21
+                                   s2 <- unify (s1 t12) (s1 t22)
+                                   return $ s2 . s1
   _ -> fail $ concat ["Type error.\n\tExpected: '", show a, "'.\n\tActual: '", show b, "'."]
 
-{-# LINE 86 "CCO/HM2SystemF.hs" #-}
+
+-- | TODO ....
+algorithmW :: Monad m => VarFactory -> TyEnv -> HM.Tm -> m (Ty, TySubst, VarFactory)
+algorithmW fac env (HM.Tm spos term) =
+ case term of
+  HM.Var x       -> case lookupEnv x env of 
+                     Nothing -> fail $ "Can not infer type of '" ++ x ++ "'." -- TODO: use spos
+                     Just ty -> return (ty, id, fac)
+  HM.Lam x t1    -> do let (a1, fac') = first TyVar $ freshTyVar fac
+                       (ty2, s, fac') <- algorithmW fac' (insertEnv x a1 env) t1
+                       return (Arr (s a1) ty2, s, fac') -- TODO: of 's $ Arr a1 ty2' ???
+  HM.App t1 t2   -> do let (a, fac') = first TyVar $ freshTyVar fac
+                       (ty1, s1, fac') <- algorithmW fac' env t1
+                       (ty2, s2, fac') <- algorithmW fac' (mapEnv s1 env) t2
+                       s3 <- unify (s2 ty1) (Arr ty2 a)
+                       return (s3 a, s3 . s2 . s1, fac')
+  HM.Let x t1 t2 -> do (ty1, s1, fac') <- algorithmW fac env t1
+                       (ty,  s2, fac') <- algorithmW fac' 
+                                            (mapEnv s1 
+                                            $ insertEnv x (gen (mapEnv s1 env) ty1) env
+                                            ) t2
+                       return (ty, s2 . s1, fac')
+{-# LINE 125 "CCO/HM2SystemF.hs" #-}
 
 {-# LINE 10 "./CCO/SystemF/AG/Base.ag" #-}
 
 type TyVar = String    -- ^ Type of type variables. 
 type Var   = String    -- ^ Type of variables.
-{-# LINE 92 "CCO/HM2SystemF.hs" #-}
+{-# LINE 131 "CCO/HM2SystemF.hs" #-}
 -- Tm ----------------------------------------------------------
 data Tm  = App (Tm ) (Tm ) 
          | Lam (Var) (Ty ) (Tm ) 
@@ -188,14 +227,14 @@ sem_Ty_Arr ty1_ ty2_  =
          _ty2Iftv :: (Set TyVar)
          _ty2IstringRep :: String
          _lhsOftv =
-             ({-# LINE 25 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 29 "CCO/HM2SystemF.ag" #-}
               _ty1Iftv `S.union` _ty2Iftv
-              {-# LINE 194 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 233 "CCO/HM2SystemF.hs" #-}
               )
          _lhsOstringRep =
-             ({-# LINE 26 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 30 "CCO/HM2SystemF.ag" #-}
               "(" ++ _ty1IstringRep ++ " -> " ++ _ty2IstringRep ++ ")"
-              {-# LINE 199 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 238 "CCO/HM2SystemF.hs" #-}
               )
          ( _ty1Iftv,_ty1IstringRep) =
              ty1_ 
@@ -211,14 +250,14 @@ sem_Ty_Forall a_ ty1_  =
          _ty1Iftv :: (Set TyVar)
          _ty1IstringRep :: String
          _lhsOftv =
-             ({-# LINE 27 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 31 "CCO/HM2SystemF.ag" #-}
               S.delete a_ _ty1Iftv
-              {-# LINE 217 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 256 "CCO/HM2SystemF.hs" #-}
               )
          _lhsOstringRep =
-             ({-# LINE 28 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 32 "CCO/HM2SystemF.ag" #-}
               "(forall " ++ a_ ++ ". " ++ _ty1IstringRep ++ ")"
-              {-# LINE 222 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 261 "CCO/HM2SystemF.hs" #-}
               )
          ( _ty1Iftv,_ty1IstringRep) =
              ty1_ 
@@ -229,14 +268,14 @@ sem_Ty_TyVar a_  =
     (let _lhsOftv :: (Set TyVar)
          _lhsOstringRep :: String
          _lhsOftv =
-             ({-# LINE 23 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 27 "CCO/HM2SystemF.ag" #-}
               S.singleton a_
-              {-# LINE 235 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 274 "CCO/HM2SystemF.hs" #-}
               )
          _lhsOstringRep =
-             ({-# LINE 24 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 28 "CCO/HM2SystemF.ag" #-}
               a_
-              {-# LINE 240 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 279 "CCO/HM2SystemF.hs" #-}
               )
      in  ( _lhsOftv,_lhsOstringRep))
 -- TyEnv -------------------------------------------------------
@@ -271,15 +310,15 @@ sem_TyEnv_ConsTyEnv var_ binding_ envTail_  =
          _envTailIftv :: (Set TyVar)
          _envTailIstringRep :: String
          _lhsOftv =
-             ({-# LINE 33 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 37 "CCO/HM2SystemF.ag" #-}
               _bindingIftv `S.union` _envTailIftv
-              {-# LINE 277 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 316 "CCO/HM2SystemF.hs" #-}
               )
          _lhsOstringRep =
-             ({-# LINE 34 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 38 "CCO/HM2SystemF.ag" #-}
               "[" ++ var_ ++ " -> " ++ _bindingIstringRep ++ "]"
                           ++ _envTailIstringRep
-              {-# LINE 283 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 322 "CCO/HM2SystemF.hs" #-}
               )
          ( _bindingIftv,_bindingIstringRep) =
              binding_ 
@@ -291,13 +330,13 @@ sem_TyEnv_EmptyTyEnv  =
     (let _lhsOftv :: (Set TyVar)
          _lhsOstringRep :: String
          _lhsOftv =
-             ({-# LINE 31 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 35 "CCO/HM2SystemF.ag" #-}
               S.empty
-              {-# LINE 297 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 336 "CCO/HM2SystemF.hs" #-}
               )
          _lhsOstringRep =
-             ({-# LINE 32 "CCO/HM2SystemF.ag" #-}
+             ({-# LINE 36 "CCO/HM2SystemF.ag" #-}
               "[]"
-              {-# LINE 302 "CCO/HM2SystemF.hs" #-}
+              {-# LINE 341 "CCO/HM2SystemF.hs" #-}
               )
      in  ( _lhsOftv,_lhsOstringRep))
