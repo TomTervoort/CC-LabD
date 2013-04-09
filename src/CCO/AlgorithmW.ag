@@ -72,19 +72,21 @@ freshVar (VarFactory n) = ("_" ++ show n, VarFactory $ n + 1)
 freshTyVar :: VarFactory -> (TyVar, VarFactory)
 freshTyVar (VarFactory n) = ("__" ++ show n, VarFactory $ n + 1)
 
+-- | Type generalisation.
 gen :: TyEnv -> Ty -> Ty
 gen env ty = S.foldr Forall ty $ freeVars ty `S.difference` freeEnvVars env
+
+-- | Type instantiation.
+inst :: VarFactory -> Ty -> (Ty, VarFactory)
+inst fac (Forall a t) = let (fresh, fac') = freshTyVar fac
+                         in first (subTyVar a $ TyVar fresh) $ inst fac' t
+inst fac ty = (ty, fac)
 
 freeVars :: Ty -> Set TyVar
 freeVars ty = ftv_Syn_Ty $ wrap_Ty (sem_Ty ty) Inh_Ty
 
 freeEnvVars :: TyEnv -> Set TyVar
 freeEnvVars env = ftv_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
-
-inst :: VarFactory -> Ty -> (Ty, VarFactory)
-inst fac (Forall a t) = let (fresh, fac') = freshTyVar fac
-                         in first (subTyVar a $ TyVar fresh) $ inst fac' t
-inst fac ty = (ty, fac)
 
 -- | A type substitution.
 type TySubst = Ty -> Ty
@@ -117,7 +119,7 @@ unify a b =
   _ -> fail $ concat ["Type error.\n\tExpected: '", show a, "'.\n\tActual: '", show b, "'."]
 
 
--- | TODO ....
+-- | Implements algorithm W for type inference.
 algorithmW :: Monad m => VarFactory -> TyEnv -> HM.Tm -> m (Ty, TySubst, VarFactory)
 algorithmW fac env (HM.Tm spos term) =
  case term of
@@ -126,7 +128,7 @@ algorithmW fac env (HM.Tm spos term) =
                      Just ty -> return (ty, id, fac)
   HM.Lam x t1    -> do let (a1, fac') = first TyVar $ freshTyVar fac
                        (ty2, s, fac') <- algorithmW fac' (insertEnv x a1 env) t1
-                       return (Arr (s a1) ty2, s, fac') -- TODO: of 's $ Arr a1 ty2' ???
+                       return (Arr (s a1) ty2, s, fac')
   HM.App t1 t2   -> do let (a, fac') = first TyVar $ freshTyVar fac
                        (ty1, s1, fac') <- algorithmW fac' env t1
                        (ty2, s2, fac') <- algorithmW fac' (mapEnv s1 env) t2
