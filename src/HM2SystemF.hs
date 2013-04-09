@@ -8,6 +8,8 @@ import qualified CCO.HM as HM
 import qualified CCO.SystemF as SF
 
 import CCO.Feedback
+import CCO.Component hiding (parser)
+import CCO.Tree
 
 import Control.Monad
 import Control.Arrow
@@ -29,3 +31,7 @@ hm2SystemF = h2s emptyEnv
          HM.Let x t1 t2 -> do (ty1, env') <- liftM (first (???)) $ inferPrincipalType t1 env
                               (ty2, env') <- liftM (first (???)) $ inferPrincipalType t2 env'
                               liftM2 SF.App (liftM (SF.Lam x ty1) $ h2s env' t2) (h2s env' t1)
+
+
+main :: IO ()
+main = ioWrap $ parser >>> component (toTree >=> hm2SystemF) >>> arr fromTree >>> printer
