@@ -46,6 +46,9 @@ instance Show Ty where
 instance Show TyEnv where
  show env = stringRep_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
 
+-- | The empty type environment.
+emptyEnv :: TyEnv
+emptyEnv = EmptyTyEnv
 
 -- | Look up a variable in an environment.
 lookupEnv :: Var -> TyEnv -> Maybe Ty
@@ -140,4 +143,15 @@ algorithmW fac env (HM.Tm spos term) =
                                             $ insertEnv x (gen (mapEnv s1 env) ty1) env
                                             ) t2
                        return (ty, s2 . s1, fac')
+
+-- | Uses algorithmW to find a principal type: the most polymorphic type that can be assigned to a 
+--   given term. An environment should be provided and will be updated. Monadic 'fail' is used in 
+--   case of a type error. 
+inferPrincipalType :: Monad m => HM.Tm -> TyEnv -> m (Ty, TyEnv)
+inferPrincipalType term env = 
+  do (ty, s, _) <- algorithmW initVarFactory env term
+     let newEnv = mapEnv s env
+     return (gen newEnv ty, newEnv)
+                             
+
 }

@@ -29,6 +29,9 @@ instance Show Ty where
 instance Show TyEnv where
  show env = stringRep_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
 
+-- | The empty type environment.
+emptyEnv :: TyEnv
+emptyEnv = EmptyTyEnv
 
 -- | Look up a variable in an environment.
 lookupEnv :: Var -> TyEnv -> Maybe Ty
@@ -123,13 +126,24 @@ algorithmW fac env (HM.Tm spos term) =
                                             $ insertEnv x (gen (mapEnv s1 env) ty1) env
                                             ) t2
                        return (ty, s2 . s1, fac')
-{-# LINE 127 "CCO/AlgorithmW.hs" #-}
+
+-- | Uses algorithmW to find a principal type: the most polymorphic type that can be assigned to a 
+--   given term. An environment should be provided and will be updated. Monadic 'fail' is used in 
+--   case of a type error. 
+inferPrincipalType :: Monad m => HM.Tm -> TyEnv -> m (Ty, TyEnv)
+inferPrincipalType term env = 
+  do (ty, s, _) <- algorithmW initVarFactory env term
+     let newEnv = mapEnv s env
+     return (gen newEnv ty, newEnv)
+                             
+
+{-# LINE 141 "CCO/AlgorithmW.hs" #-}
 
 {-# LINE 10 "./CCO/SystemF/AG/Base.ag" #-}
 
 type TyVar = String    -- ^ Type of type variables. 
 type Var   = String    -- ^ Type of variables.
-{-# LINE 133 "CCO/AlgorithmW.hs" #-}
+{-# LINE 147 "CCO/AlgorithmW.hs" #-}
 -- Tm ----------------------------------------------------------
 data Tm  = App (Tm ) (Tm ) 
          | Lam (Var) (Ty ) (Tm ) 
@@ -231,12 +245,12 @@ sem_Ty_Arr ty1_ ty2_  =
          _lhsOftv =
              ({-# LINE 29 "CCO/AlgorithmW.ag" #-}
               _ty1Iftv `S.union` _ty2Iftv
-              {-# LINE 235 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 249 "CCO/AlgorithmW.hs" #-}
               )
          _lhsOstringRep =
              ({-# LINE 30 "CCO/AlgorithmW.ag" #-}
               "(" ++ _ty1IstringRep ++ " -> " ++ _ty2IstringRep ++ ")"
-              {-# LINE 240 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 254 "CCO/AlgorithmW.hs" #-}
               )
          ( _ty1Iftv,_ty1IstringRep) =
              ty1_ 
@@ -254,12 +268,12 @@ sem_Ty_Forall a_ ty1_  =
          _lhsOftv =
              ({-# LINE 31 "CCO/AlgorithmW.ag" #-}
               S.delete a_ _ty1Iftv
-              {-# LINE 258 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 272 "CCO/AlgorithmW.hs" #-}
               )
          _lhsOstringRep =
              ({-# LINE 32 "CCO/AlgorithmW.ag" #-}
               "(forall " ++ a_ ++ ". " ++ _ty1IstringRep ++ ")"
-              {-# LINE 263 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 277 "CCO/AlgorithmW.hs" #-}
               )
          ( _ty1Iftv,_ty1IstringRep) =
              ty1_ 
@@ -272,12 +286,12 @@ sem_Ty_TyVar a_  =
          _lhsOftv =
              ({-# LINE 27 "CCO/AlgorithmW.ag" #-}
               S.singleton a_
-              {-# LINE 276 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 290 "CCO/AlgorithmW.hs" #-}
               )
          _lhsOstringRep =
              ({-# LINE 28 "CCO/AlgorithmW.ag" #-}
               a_
-              {-# LINE 281 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 295 "CCO/AlgorithmW.hs" #-}
               )
      in  ( _lhsOftv,_lhsOstringRep))
 -- TyEnv -------------------------------------------------------
@@ -314,13 +328,13 @@ sem_TyEnv_ConsTyEnv var_ binding_ envTail_  =
          _lhsOftv =
              ({-# LINE 37 "CCO/AlgorithmW.ag" #-}
               _bindingIftv `S.union` _envTailIftv
-              {-# LINE 318 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 332 "CCO/AlgorithmW.hs" #-}
               )
          _lhsOstringRep =
              ({-# LINE 38 "CCO/AlgorithmW.ag" #-}
               "[" ++ var_ ++ " -> " ++ _bindingIstringRep ++ "]"
                           ++ _envTailIstringRep
-              {-# LINE 324 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 338 "CCO/AlgorithmW.hs" #-}
               )
          ( _bindingIftv,_bindingIstringRep) =
              binding_ 
@@ -334,11 +348,11 @@ sem_TyEnv_EmptyTyEnv  =
          _lhsOftv =
              ({-# LINE 35 "CCO/AlgorithmW.ag" #-}
               S.empty
-              {-# LINE 338 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 352 "CCO/AlgorithmW.hs" #-}
               )
          _lhsOstringRep =
              ({-# LINE 36 "CCO/AlgorithmW.ag" #-}
               "[]"
-              {-# LINE 343 "CCO/AlgorithmW.hs" #-}
+              {-# LINE 357 "CCO/AlgorithmW.hs" #-}
               )
      in  ( _lhsOftv,_lhsOstringRep))
