@@ -1,0 +1,22 @@
+-- Contains attributes and semantics of Ty and TyEnv.
+
+-- Depends on Base.ag and TyEnv.ag.
+
+attr Ty TyEnv
+    syn ftv :: (Set TyVar)
+    syn stringRep :: String
+
+sem Ty
+ | TyVar  lhs.ftv       = S.singleton @a
+          lhs.stringRep = @a
+ | Arr    lhs.ftv       = @ty1.ftv `S.union` @ty2.ftv
+          lhs.stringRep = "(" ++ @ty1.stringRep ++ " -> " ++ @ty2.stringRep ++ ")"
+ | Forall lhs.ftv       = S.delete @a @ty1.ftv
+          lhs.stringRep = "(forall " ++ @a ++ ". " ++ @ty1.stringRep ++ ")"
+
+sem TyEnv
+ | EmptyTyEnv lhs.ftv       = S.empty
+              lhs.stringRep = "[]"
+ | ConsTyEnv  lhs.ftv       = @binding.ftv `S.union` @envTail.ftv
+              lhs.stringRep = "[" ++ @var ++ " -> " ++ @binding.stringRep ++ "]" 
+                                          ++ @envTail.stringRep

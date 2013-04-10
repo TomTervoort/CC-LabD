@@ -1,0 +1,24 @@
+-- Defines a datatype representing type environments.
+
+-- Depends on Base.ag.
+
+-- | An environment of variables bound to types.
+data TyEnv
+ | EmptyTyEnv
+ | ConsTyEnv  var :: {Var}  binding :: Ty  envTail :: TyEnv
+ 
+{
+-- | The empty type environment.
+emptyEnv :: TyEnv
+emptyEnv = EmptyTyEnv
+
+-- | Look up a variable in an environment.
+lookupEnv :: Var -> TyEnv -> Maybe Ty
+lookupEnv _ EmptyTyEnv = Nothing
+lookupEnv x (ConsTyEnv y t rest) | x == y    = Just t
+								 | otherwise = lookupEnv x rest
+
+-- | Insert a binding into an environment.
+insertEnv :: Var -> Ty -> TyEnv -> TyEnv
+insertEnv = ConsTyEnv
+}
