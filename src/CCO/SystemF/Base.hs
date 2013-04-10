@@ -18,6 +18,15 @@ module CCO.SystemF.Base (
   , Var                                 -- = String
   , Ty (TyVar, Arr, Forall)             -- instances: Tree
   , Tm (Var, Lam, App, TyLam, TyApp)    -- instances: Tree, Printable
+
+  , TyEnv
+  , emptyEnv
+  , lookupEnv
+  , insertEnv
+  , freeVars
+  , freeEnvVars
+  , TySubst
+  , mapEnv
 ) where
 
 import CCO.SystemF.AG

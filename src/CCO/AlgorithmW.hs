@@ -12,12 +12,6 @@ import qualified Data.Map as M
 import Control.Arrow
 import Control.Monad
 
-instance Show Ty where
- show ty = stringRep_Syn_Ty $ wrap_Ty (sem_Ty ty) Inh_Ty
-
-instance Show TyEnv where
- show env = stringRep_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
-
 -- | Generator of fresh (type) variables.
 newtype VarFactory = VarFactory Int
 
@@ -42,20 +36,6 @@ inst :: VarFactory -> Ty -> (Ty, VarFactory)
 inst fac (Forall a t) = let (fresh, fac') = freshTyVar fac
                          in first (subTyVar a $ TyVar fresh) $ inst fac' t
 inst fac ty = (ty, fac)
-
-freeVars :: Ty -> Set TyVar
-freeVars ty = ftv_Syn_Ty $ wrap_Ty (sem_Ty ty) Inh_Ty
-
-freeEnvVars :: TyEnv -> Set TyVar
-freeEnvVars env = ftv_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) Inh_TyEnv
-
--- | A type substitution.
-type TySubst = Ty -> Ty
-
--- | Map a substitution over all the types within an environment.
-mapEnv :: TySubst -> TyEnv -> TyEnv
-mapEnv _ EmptyTyEnv = EmptyTyEnv
-mapEnv f (ConsTyEnv x t rest) = ConsTyEnv x (f t) $ mapEnv f rest
 
 -- | Substitute one type variable with a type.
 subTyVar :: TyVar -> Ty -> TySubst

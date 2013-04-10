@@ -6,7 +6,7 @@ import CCO.AlgorithmW (inferPrincipalType)
 
 import qualified CCO.HM as HM
 import qualified CCO.SystemF as SF
-import CCO.SystemF (TyEnv, emptyTyEnv, insertTyEnv)
+import CCO.SystemF (TyEnv, emptyEnv, insertEnv)
 
 import CCO.Feedback
 import CCO.Component hiding (parser)

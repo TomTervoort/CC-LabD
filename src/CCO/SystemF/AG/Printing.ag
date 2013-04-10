@@ -51,7 +51,7 @@ sem Tm
 type Prec = Int
 }
 
-attr Ty Tm
+attr Ty Tm TyEnv
   inh prec :: {Prec}
 
 sem Ty

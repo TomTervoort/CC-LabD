@@ -8,6 +8,13 @@ data TyEnv
  | ConsTyEnv  var :: {Var}  binding :: Ty  envTail :: TyEnv
  
 {
+
+instance Show Ty where
+ show ty = stringRep_Syn_Ty $ wrap_Ty (sem_Ty ty) (Inh_Ty 0)
+
+instance Show TyEnv where
+ show env = stringRep_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) (Inh_TyEnv 0)
+
 -- | The empty type environment.
 emptyEnv :: TyEnv
 emptyEnv = EmptyTyEnv
@@ -21,4 +28,5 @@ lookupEnv x (ConsTyEnv y t rest) | x == y    = Just t
 -- | Insert a binding into an environment.
 insertEnv :: Var -> Ty -> TyEnv -> TyEnv
 insertEnv = ConsTyEnv
+
 }

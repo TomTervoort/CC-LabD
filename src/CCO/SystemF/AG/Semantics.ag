@@ -20,3 +20,24 @@ sem TyEnv
  | ConsTyEnv  lhs.ftv       = @binding.ftv `S.union` @envTail.ftv
               lhs.stringRep = "[" ++ @var ++ " -> " ++ @binding.stringRep ++ "]" 
                                           ++ @envTail.stringRep
+
+
+{
+
+-- | Provides the free type variables within a type.
+freeVars :: Ty -> Set TyVar
+freeVars ty = ftv_Syn_Ty $ wrap_Ty (sem_Ty ty) (Inh_Ty 0)
+
+-- | Provides the free type variables within a type environment.
+freeEnvVars :: TyEnv -> Set TyVar
+freeEnvVars env = ftv_Syn_TyEnv $ wrap_TyEnv (sem_TyEnv env) (Inh_TyEnv 0)
+
+-- | A type substitution.
+type TySubst = Ty -> Ty
+
+-- | Map a substitution over all the types within an environment.
+mapEnv :: TySubst -> TyEnv -> TyEnv
+mapEnv _ EmptyTyEnv = EmptyTyEnv
+mapEnv f (ConsTyEnv x t rest) = ConsTyEnv x (f t) $ mapEnv f rest
+
+}
