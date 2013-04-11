@@ -1,7 +1,3 @@
-
--- | Contains the converter from a Hindley-Miller to a SystemF term.
-module CCO.HM2SystemF where
-
 import CCO.AlgorithmW (inferPrincipalType)
 
 import qualified CCO.HM as HM

@@ -29,6 +29,12 @@ executable parse-hm
 
 executable pp-systemf
   main-is:             PpSystemF.hs
-  build-depends:       base, cco >= 0.0.4
+  build-depends:       base, containers, cco >= 0.0.4
+  other-modules:       CCO.SystemF, CCO.SystemF.AG, CCO.SystemF.Base
+  hs-source-dirs:      src
+
+executable hm2systemf
+  main-is:             HM2SystemF.hs
+  build-depends:       base, containers, cco >= 0.0.4
   other-modules:       CCO.SystemF, CCO.SystemF.AG, CCO.SystemF.Base
   hs-source-dirs:      src
